@@ -82,26 +82,29 @@ namespace WrongCharacter
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title: CodeFixResources.CodeFixTitle,
-                    createChangedSolution: c => MakeUppercaseAsync(context.Document, declaration, c),
+                    createChangedDocument: c => MakeUppercaseAsync(context.Document, declaration, c),
                     equivalenceKey: nameof(CodeFixResources.CodeFixTitle)),
                 diagnostic);
         }
 
-        async Task<Solution> MakeUppercaseAsync(Document document, SyntaxNode node, CancellationToken cancellationToken)
+        async Task<Document> MakeUppercaseAsync(Document document, SyntaxNode node, CancellationToken cancellationToken)
         {
-            string tokenName = GetTokenName(node as CSharpSyntaxNode);
+            var nodeTextToken = GetToken(node as CSharpSyntaxNode);
+            string tokenName = nodeTextToken.Text;
             var newName = ProcessName(tokenName);
 
             // Get the symbol representing the type to be renamed.
-            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            ISymbol typeSymbol = GetDeclaredSymbos(node, semanticModel, cancellationToken);
-            // Produce a new solution that has all references to that type renamed, including the declaration.
-            var originalSolution = document.Project.Solution;
-            var optionSet = originalSolution.Workspace.Options;
-            var newSolution = await Renamer.RenameSymbolAsync(document.Project.Solution, typeSymbol, newName, optionSet, cancellationToken).ConfigureAwait(false);
-
-            // Return the new solution with the now-uppercase type name.
-            return newSolution;
+            //var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+            var trailingTrivia = nodeTextToken.TrailingTrivia;
+            var leadingTrivia = nodeTextToken.LeadingTrivia;
+            var oldRoot = await document.GetSyntaxRootAsync(cancellationToken);
+            var newToken = SyntaxFactory.Identifier(newName);
+            newToken = newToken.WithTrailingTrivia(trailingTrivia);
+            newToken = newToken.WithLeadingTrivia(leadingTrivia);
+            var newNode = node.ReplaceToken(nodeTextToken, newToken);
+            
+            var newRoot = oldRoot.ReplaceNode(node, newNode);
+            return document.WithSyntaxRoot(newRoot);
         }
 
         private static ISymbol GetDeclaredSymbos(SyntaxNode node, SemanticModel semanticModel, CancellationToken cancellationToken)
@@ -115,80 +118,80 @@ namespace WrongCharacter
             return typeSymbol;
         }
 
-        string GetTokenName(CSharpSyntaxNode node) {
+        SyntaxToken GetToken(CSharpSyntaxNode node) {
             if (node is IdentifierNameSyntax identifierNameSyntax)
             {
-                return identifierNameSyntax.Identifier.Text;
+                return identifierNameSyntax.Identifier;
             }
             if (node is MethodDeclarationSyntax methodDeclarationSyntax)
             {
-                return methodDeclarationSyntax.Identifier.Text;
+                return methodDeclarationSyntax.Identifier;
             }
             if (node is ClassDeclarationSyntax classDeclarationSyntax)
             {
-                return classDeclarationSyntax.Identifier.Text;
+                return classDeclarationSyntax.Identifier;
             }
             if (node is InterfaceDeclarationSyntax interfaceDeclarationSyntax)
             {
-                return interfaceDeclarationSyntax.Identifier.Text;
+                return interfaceDeclarationSyntax.Identifier;
             }
             if (node is StructDeclarationSyntax structDeclarationSyntax)
             {
-                return structDeclarationSyntax.Identifier.Text;
+                return structDeclarationSyntax.Identifier;
             }
             if (node is EnumDeclarationSyntax enumDeclarationSyntax)
             {
-                return enumDeclarationSyntax.Identifier.Text;
+                return enumDeclarationSyntax.Identifier;
             }
             if (node is DelegateDeclarationSyntax delegateDeclarationSyntax)
             {
-                return delegateDeclarationSyntax.Identifier.Text;
+                return delegateDeclarationSyntax.Identifier;
             }
             if (node is VariableDeclaratorSyntax variableDeclaratorSyntax)
             {
-                return variableDeclaratorSyntax.Identifier.Text;
+                return variableDeclaratorSyntax.Identifier;
             }
             if (node is ParameterSyntax parameterSyntax)
             {
-                return parameterSyntax.Identifier.Text;
+                return parameterSyntax.Identifier;
             }
             if (node is PropertyDeclarationSyntax propertyDeclarationSyntax)
             {
-                return propertyDeclarationSyntax.Identifier.Text;
+                return propertyDeclarationSyntax.Identifier;
             }
             if (node is FieldDeclarationSyntax fieldDeclarationSyntax)
             {
-                return fieldDeclarationSyntax.Declaration.Variables.First().Identifier.Text;
+                return fieldDeclarationSyntax.Declaration.Variables.First().Identifier;
             }
             if (node is EventDeclarationSyntax eventDeclarationSyntax)
             {
-                return eventDeclarationSyntax.Identifier.Text;
+                return eventDeclarationSyntax.Identifier;
             }
             if (node is EventFieldDeclarationSyntax eventFieldDeclarationSyntax)
             {
-                return eventFieldDeclarationSyntax.Declaration.Variables.First().Identifier.Text;
+                return eventFieldDeclarationSyntax.Declaration.Variables.First().Identifier;
             }
             if (node is EnumMemberDeclarationSyntax enumMemberDeclarationSyntax)
             {
-                return enumMemberDeclarationSyntax.Identifier.Text;
+                return enumMemberDeclarationSyntax.Identifier;
             }
             if (node is TypeParameterSyntax typeParameterSyntax)
             {
-                return typeParameterSyntax.Identifier.Text;
+                return typeParameterSyntax.Identifier;
             }
             if (node is ConstructorDeclarationSyntax constructorDeclarationSyntax)
             {
-                return constructorDeclarationSyntax.Identifier.Text;
+                return constructorDeclarationSyntax.Identifier;
             }
             if (node is DestructorDeclarationSyntax destructorDeclarationSyntax)
             {
-                return destructorDeclarationSyntax.Identifier.Text;
+                return destructorDeclarationSyntax.Identifier;
             }
             if (node is NamespaceDeclarationSyntax namespaceDeclarationSyntax)
             {
-                return namespaceDeclarationSyntax.Name.ToString();
+                return namespaceDeclarationSyntax.GetFirstToken();
             }
-            return null;
+            return default;
         }
         string ProcessName(string text)
         {

@@ -4,7 +4,6 @@ using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Rename;
-using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -69,42 +68,31 @@ namespace WrongCharacter
         public sealed override async Task RegisterCodeFixesAsync(CodeFixContext context)
         {
             var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
-
-            // TODO: Replace the following code with your own analysis, generating a CodeAction for each fix to suggest
             var diagnostic = context.Diagnostics.First();
             var diagnosticSpan = diagnostic.Location.SourceSpan;
-
-            // Find the type declaration identified by the diagnostic.
-            //var declaration = root.FindToken(diagnosticSpan.Start).Parent.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().First();
             SyntaxNode declaration = root.FindToken(diagnosticSpan.Start).Parent;
-
-            // Register a code action that will invoke the fix.
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title: CodeFixResources.CodeFixTitle,
-                    createChangedDocument: c => MakeUppercaseAsync(context.Document, declaration, c),
+                    createChangedSolution: c =>     RemoveWrongCharacters2(context.Document, declaration, c),
                     equivalenceKey: nameof(CodeFixResources.CodeFixTitle)),
                 diagnostic);
         }
-
-        async Task<Document> MakeUppercaseAsync(Document document, SyntaxNode node, CancellationToken cancellationToken)
+        async Task<Solution> RemoveWrongCharacters2(Document document, SyntaxNode node, CancellationToken cancellationToken)
         {
             var nodeTextToken = GetToken(node as CSharpSyntaxNode);
             string tokenName = nodeTextToken.Text;
             var newName = ProcessName(tokenName);
-
-            // Get the symbol representing the type to be renamed.
-            //var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            var trailingTrivia = nodeTextToken.TrailingTrivia;
-            var leadingTrivia = nodeTextToken.LeadingTrivia;
-            var oldRoot = await document.GetSyntaxRootAsync(cancellationToken);
-            var newToken = SyntaxFactory.Identifier(newName);
-            newToken = newToken.WithTrailingTrivia(trailingTrivia);
-            newToken = newToken.WithLeadingTrivia(leadingTrivia);
-            var newNode = node.ReplaceToken(nodeTextToken, newToken);
-            
-            var newRoot = oldRoot.ReplaceNode(node, newNode);
-            return document.WithSyntaxRoot(newRoot);
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+            var actualNode = node;
+            if (node is IdentifierNameSyntax && node.Parent is NamespaceDeclarationSyntax)
+            {
+                actualNode = node.Parent;
+            }
+            var symbol = semanticModel.GetDeclaredSymbol( actualNode, cancellationToken);
+            var optionSet = document.Project.Solution.Workspace.Options;
+            var newSolution = await Renamer.RenameSymbolAsync(document.Project.Solution, symbol, newName, optionSet, cancellationToken).ConfigureAwait(false);
+            return newSolution;
         }
 
         private static ISymbol GetDeclaredSymbos(SyntaxNode node, SemanticModel semanticModel, CancellationToken cancellationToken)

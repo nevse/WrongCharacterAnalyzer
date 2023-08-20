@@ -158,5 +158,37 @@ namespace WrongCharacter.Test
             var expected = VerifyCS.Diagnostic("DXMAUI0001").WithLocation(0).WithArguments("TypыName");
             await VerifyCS.VerifyCodeFixAsync(test, expected, fixtest);
         }
+        [TestMethod]
+        public async Task WrongLocalNameWithUsageTest()
+        {
+            var test = @"
+    namespace Some
+    {
+        class Simple
+        {
+            public void SomeMethod()
+            {
+                string {|#0:TypыName|} = ""asf"";
+                System.Console.WriteLine(TypыName);
+            }
+        }
+    }";
+
+            var fixtest = @"
+    namespace Some
+    {
+        class Simple
+        {
+            public void SomeMethod()
+            {
+                string TypyName = ""asf"";
+                System.Console.WriteLine(TypyName);
+            }
+        }
+    }";
+
+            var expected = VerifyCS.Diagnostic("DXMAUI0001").WithLocation(0).WithArguments("TypыName");
+            await VerifyCS.VerifyCodeFixAsync(test, expected, fixtest);
+        }
     }
 }
